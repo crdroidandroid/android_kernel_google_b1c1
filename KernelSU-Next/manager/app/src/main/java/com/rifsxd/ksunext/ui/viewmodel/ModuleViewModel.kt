@@ -1,6 +1,5 @@
 package com.rifsxd.ksunext.ui.viewmodel
 
-import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.derivedStateOf
@@ -9,20 +8,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.dergoogler.mmrl.platform.Platform
-import com.dergoogler.mmrl.platform.TIMEOUT_MILLIS
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
-import java.io.File
 import java.text.Collator
 import java.util.Locale
 import com.rifsxd.ksunext.ksuApp
 import com.rifsxd.ksunext.ui.util.HanziToPinyin
 import com.rifsxd.ksunext.ui.util.listModules
-import com.rifsxd.ksunext.ui.util.getModuleSize
+import com.rifsxd.ksunext.ui.util.overlayFsAvailable
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -46,9 +39,7 @@ class ModuleViewModel : ViewModel() {
         val updateJson: String,
         val hasWebUi: Boolean,
         val hasActionScript: Boolean,
-        val dirId: String,
-        val size: Long,
-        val banner: String
+        val dirId: String
     )
 
     data class ModuleUpdateInfo(
@@ -58,6 +49,9 @@ class ModuleViewModel : ViewModel() {
         val changelog: String,
     )
 
+    var isOverlayAvailable by mutableStateOf(overlayFsAvailable())
+        private set
+
     var isRefreshing by mutableStateOf(false)
         private set
 
@@ -65,15 +59,11 @@ class ModuleViewModel : ViewModel() {
 
     var sortAToZ by mutableStateOf(false)
     var sortZToA by mutableStateOf(false)
-    var sortSizeLowToHigh by mutableStateOf(false)
-    var sortSizeHighToLow by mutableStateOf(false)
 
     val moduleList by derivedStateOf {
         val comparator = when {
             sortAToZ -> compareBy<ModuleInfo> { it.name.lowercase() }
             sortZToA -> compareByDescending<ModuleInfo> { it.name.lowercase() }
-            sortSizeLowToHigh -> compareBy<ModuleInfo> { it.size }
-            sortSizeHighToLow -> compareByDescending<ModuleInfo> { it.size }
             else -> compareBy<ModuleInfo> { it.dirId }
         }.thenBy(Collator.getInstance(Locale.getDefault()), ModuleInfo::id)
 
@@ -94,84 +84,55 @@ class ModuleViewModel : ViewModel() {
         isNeedRefresh = true
     }
 
-    var zipUris by mutableStateOf<List<Uri>>(emptyList())
-
-    fun updateZipUris(uris: List<Uri>) {
-        zipUris = uris
-    }
-
-    fun clearZipUris() {
-        zipUris = emptyList()
-    }
-
     fun fetchModuleList() {
-        
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
+            isRefreshing = true
 
-            withContext(Dispatchers.Main) {
-                isRefreshing = true
+            val oldModuleList = modules
+
+            val start = SystemClock.elapsedRealtime()
+
+            kotlin.runCatching {
+                isOverlayAvailable = overlayFsAvailable()
+
+                val result = listModules()
+
+                Log.i(TAG, "result: $result")
+
+                val array = JSONArray(result)
+                modules = (0 until array.length())
+                    .asSequence()
+                    .map { array.getJSONObject(it) }
+                    .map { obj ->
+                        ModuleInfo(
+                            obj.getString("id"),
+                            obj.optString("name"),
+                            obj.optString("author", "Unknown"),
+                            obj.optString("version", "Unknown"),
+                            obj.optInt("versionCode", 0),
+                            obj.optString("description"),
+                            obj.getBoolean("enabled"),
+                            obj.getBoolean("update"),
+                            obj.getBoolean("remove"),
+                            obj.optString("updateJson"),
+                            obj.optBoolean("web"),
+                            obj.optBoolean("action"),
+                            obj.getString("dir_id")
+                        )
+                    }.toList()
+                isNeedRefresh = false
+            }.onFailure { e ->
+                Log.e(TAG, "fetchModuleList: ", e)
+                isRefreshing = false
             }
 
-            withContext(Dispatchers.IO) {
-                withTimeoutOrNull(TIMEOUT_MILLIS) {
-                    while (!Platform.isAlive) {
-                        delay(500)
-                    }
-                } ?: run {
-                    isRefreshing = false
-                    Log.e(TAG, "Platform is not alive, aborting fetchModuleList")
-                    return@withContext
-                }
-
-                val start = SystemClock.elapsedRealtime()
-                val oldModuleList = modules
-
-                kotlin.runCatching {
-                    val result = listModules()
-                    Log.i(TAG, "result: $result")
-
-                    val array = JSONArray(result)
-                    modules = (0 until array.length())
-                        .asSequence()
-                        .map { array.getJSONObject(it) }
-                        .map { obj ->
-                            val id = obj.getString("id")
-                            val dirId = obj.getString("dir_id")
-                            val moduleDir = File("/data/adb/modules/$dirId")
-                            val size = getModuleSize(moduleDir)
-
-                            ModuleInfo(
-                                id,
-                                obj.optString("name"),
-                                obj.optString("author", "Unknown"),
-                                obj.optString("version", "Unknown"),
-                                obj.optInt("versionCode", 0),
-                                obj.optString("description"),
-                                obj.getBoolean("enabled"),
-                                obj.getBoolean("update"),
-                                obj.getBoolean("remove"),
-                                obj.optString("updateJson"),
-                                obj.optBoolean("web"),
-                                obj.optBoolean("action"),
-                                dirId,
-                                size,
-                                obj.optString("banner")
-                            )
-                        }.toList()
-                    isNeedRefresh = false
-                }.onFailure { e ->
-                    Log.e(TAG, "fetchModuleList: ", e)
-                    isRefreshing = false
-                }
-
-                // when both old and new is kotlin.collections.EmptyList
-                // moduleList update will don't trigger
-                if (oldModuleList === modules) {
-                    isRefreshing = false
-                }
-
-                Log.i(TAG, "load cost: ${SystemClock.elapsedRealtime() - start}, modules: $modules")
+            // when both old and new is kotlin.collections.EmptyList
+            // moduleList update will don't trigger
+            if (oldModuleList === modules) {
+                isRefreshing = false
             }
+
+            Log.i(TAG, "load cost: ${SystemClock.elapsedRealtime() - start}, modules: $modules")
         }
     }
 

@@ -1,7 +1,6 @@
 package com.rifsxd.ksunext.ui.webui
 
 import android.content.ServiceConnection
-import android.content.pm.PackageInfo
 import android.util.Log
 import com.dergoogler.mmrl.platform.Platform
 import com.dergoogler.mmrl.platform.hiddenApi.HiddenPackageManager
@@ -57,17 +56,5 @@ suspend fun initPlatform() = withContext(Dispatchers.IO) {
     }
 }
 
-fun Platform.Companion.getInstalledPackagesAll(catch: (Exception) -> Unit = {}): List<PackageInfo> =
-    try {
-        val packages = mutableListOf<PackageInfo>()
-        val userInfos = userManager.getUsers()
-
-        for (userInfo in userInfos) {
-            packages.addAll(packageManager.getInstalledPackages(0, userInfo.id))
-        }
-
-        packages
-    } catch (e: Exception) {
-        catch(e)
-        packageManager.getInstalledPackages(0, userManager.myUserId)
-    }
+val Platform.Companion.packageManager get(): HiddenPackageManager = HiddenPackageManager(this.mService)
+val Platform.Companion.userManager get(): HiddenUserManager = HiddenUserManager(this.mService)

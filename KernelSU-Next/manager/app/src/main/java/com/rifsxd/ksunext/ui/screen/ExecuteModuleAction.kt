@@ -1,6 +1,5 @@
 package com.rifsxd.ksunext.ui.screen
 
-import android.content.Context
 import android.os.Environment
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
@@ -36,7 +35,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.platform.LocalView
@@ -70,11 +68,6 @@ fun ExecuteModuleActionScreen(navigator: DestinationsNavigator, moduleId: String
     val scrollState = rememberScrollState()
     var actionResult: Boolean
     var isActionRunning by rememberSaveable { mutableStateOf(true) }
-
-    val context = LocalContext.current
-    // Read developer options from SharedPreferences
-    val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
-    val developerOptionsEnabled = prefs.getBoolean("enable_developer_options", false)
 
     val view = LocalView.current
     DisposableEffect(isActionRunning) {
@@ -165,7 +158,7 @@ fun ExecuteModuleActionScreen(navigator: DestinationsNavigator, moduleId: String
             }
             Text(
                 modifier = Modifier.padding(8.dp),
-                text = if (developerOptionsEnabled) logContent.toString() else text,
+                text = text,
                 fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 fontFamily = FontFamily.Monospace,
                 lineHeight = MaterialTheme.typography.bodySmall.lineHeight,

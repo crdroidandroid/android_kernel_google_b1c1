@@ -56,7 +56,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.dropUnlessResumed
-import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.ramcosta.composedestinations.annotation.Destination
@@ -95,7 +94,6 @@ fun AppProfileScreen(
     val snackBarHost = LocalSnackbarHost.current
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val scope = rememberCoroutineScope()
-    val viewModel: SuperUserViewModel = viewModel()
     val failToUpdateAppProfile = stringResource(R.string.failed_to_update_app_profile).format(appInfo.label)
     val failToUpdateSepolicy = stringResource(R.string.failed_to_update_sepolicy).format(appInfo.label)
     val suNotAllowed = stringResource(R.string.su_not_allowed).format(appInfo.label)
@@ -162,7 +160,6 @@ fun AppProfileScreen(
                         snackBarHost.showSnackbar(failToUpdateAppProfile.format(appInfo.uid))
                     } else {
                         profile = it
-                        viewModel.updateAppProfile(packageName, it)
                     }
                 }
             },
